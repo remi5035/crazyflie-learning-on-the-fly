@@ -127,6 +127,8 @@ Classic PID cascades control a Crazyflie well in near-static hover but can't res
 
 On real hardware, the learned policy reaches **comparable or better performance than the stock Bitcraze PID**: roughly 6 cm horizontal error vs. 5 cm for PID, but attitude oscillations cut from **6° to 2.5° peak-to-peak** and no altitude oscillation — the RL policy trades a small amount of static precision for a much smoother, more stable flight. Full comparison plots and numbers are in the report.
 
+This classic PPO-in-Genesis training and sim-to-real transfer — the first part of the underlying report (simulator setup, reward shaping, domain randomization, PID vs. RL comparison) — has its own dedicated repo: **[remi5035/Crazyflie-2.0-Sim2Real](https://github.com/remi5035/Crazyflie-2.0-Sim2Real.git)**. This branch builds on that policy and focuses specifically on the online Learning-on-the-Fly adaptation described below.
+
 ### Learning on the Fly: adapting the simulator mid-flight
 
 > 🚧 **Work in progress.** The residual-acceleration model below is still being tuned — the fit shown is an early checkpoint, not a finished result. The rest of this section describes the intended method and the current, partial validation.
