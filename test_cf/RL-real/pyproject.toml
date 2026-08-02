@@ -1,0 +1,14 @@
+ [project]
+  name = "rl-real"
+  version = "0.0.1"
+  requires-python = ">=3.11"
+  dependencies = [
+    "torch",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pandas",
+    "cflib",
+    "pynput",
+    "pyyaml",
+  ]

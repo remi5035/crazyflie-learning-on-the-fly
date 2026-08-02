@@ -1,0 +1,149 @@
+# ============================================================================
+#  Hyperparamètres de la pipeline LOTF — banc d'essai Genesis (test_cf/)
+#  Source unique, lue par : finetune_lotf_jax.py · finetune_lotf_worker.py ·
+#  lotf_genesis_eval.py   (via lotf_config.py)
+#
+#  Colonne "article" = Pan et al. (RA-L/ICRA 2026), Sec. III-B + Sec. expérimentale.
+#  Colonne "Gazebo"  = scripts/finetune_lotf.py (pipeline ROS de référence).
+#  Les divergences connues du port Genesis sont signalées par  ⚠ .
+#
+#  NOTE : les constantes PLATEFORME/ENV physiques (masse, DT, delay, bornes
+#  d'action, obs 27-dim, archi MLP) restent dans test_cf/RL-real/cf_params.py
+#  (single source partagée avec le vrai drone). Elles sont seulement RECOPIÉES
+#  pour référence en bas (`platform_ref`) — cf_params.py fait foi, pas ce bloc.
+# ============================================================================
+
+# ── Fit du résidu de dynamique (ensemble) ──────────────────────────────────
+# Article : "each residual dynamics learning step (100 iterations)".
+# Gazebo   : FT_NUM_MODELS=3, FT_RES_LR=1e-2, FT_RES_LAMBDA=1e-3, FT_RES_EPOCHS=100.
+# -> Genesis ALIGNÉ avec l'article et Gazebo.
+residual_fit:
+  num_models: 3        # ensemble de 3 MLP (seeds distincts), moyennés
+  lr: 0.01
+  lambda_reg: 0.001    # régularisation par norme spectrale (stabilité du résidu)
+  epochs: 100          # "100 iterations" (article)
+  eval_every: 10
+  hidden: 128          # MLP résiduel 19 -> 128 -> 128 -> 3
+
+# ── Adaptation de la politique par BPTT ─────────────────────────────────────
+# Article : "each policy adaptation step runs for 30 epochs across 10 environments
+#            (45k sim steps, ~1.5 s) ... with only 3 adaptation steps".
+# Gazebo   : FT_EPOCHS_PER_STEP=30, FT_ADAPT_STEPS=2, refit du résidu ENTRE steps.
+#            (incrémental : évite de sur-entraîner contre un résidu localement valide).
+bptt:
+  num_envs: 10         # article : 10 envs
+  max_sim_time: 3.0    # s ; 150 pas @ 50 Hz -> 30 epochs × 10 envs × 150 = 45k steps
+  lr: 0.001            # pas Adam (schedule cosine sur le nb d'epochs)
+  seed: 0
+  epochs_per_step: 30  # article/Gazebo : 30 epochs PAR step d'adaptation
+  adapt_steps: 3       # article : ~3 steps incrémentaux (Gazebo : 2) ; refit résidu entre
+  grad_clip: 0.5       # clip de la norme globale du gradient BPTT (comme le pretrain) :
+                       # le BPTT traverse un quad instable -> gradient explosif ; sans clip
+                       # un pic éjecte la policy (divergence aléatoire du 1er step).
+  quad: crazyflie_quad # lotf.objects.Quadrotor.from_name(...) ; use_forward_residual=True
+
+# ── Env d'entraînement BPTT : HoveringStateEnv (lotf) ───────────────────────
+# Mêmes réglages que scripts/finetune_lotf.py (randomisation + reward).
+hovering_env:
+  yaw_scale: 1.0
+  pitch_roll_scale: 0.1
+  velocity_std: 0.1
+  omega_std: 0.1
+  reward_sharpness: 3.0 #6.0        # raideur de pos_cost près de la cible : ↑ -> hover plus serré
+                               # (smooth_l1 est quadratique près de 0, son gradient s'annule
+                               #  à la cible ; sharpness ↑ raidit le rappel sur les derniers cm)
+  action_penalty_weight: 0.5   # pénalise l'AMPLITUDE de l'action, pas sa variation (Δ)
+  margin: 0.5
+
+# ── Learning-on-the-fly EN VOL dans Genesis (lotf_genesis_eval --online-finetune) ──
+# Adaptation par un TIR UNIQUE FORT (one-shot), aligné sur le notebook de validation
+# `tests/exact_residual_finetune_genesis.ipynb` (qui corrige bien l'offset 0.13->0.07 m).
+# ⚠ L'ancienne config INCRÉMENTALE (adapt_steps=2-3, bptt_epochs=30/step) a été testée en
+# live et DÉGRADAIT le hover (0.13 -> 0.21 m) : sur un résidu STRUCTUREL constant (décalage
+# de masse), empiler des petits steps qui refittent le résidu sur des fenêtres post-swap
+# (avec wander xy) dérive la policy — exactement le risque que ce bloc signalait. Le BPTT
+# one-shot reproduit le notebook qui marche. (L'incrémental reste pertinent pour une
+# dynamique qui VARIE dans le temps ; pas pour un step de masse.)
+online:
+  window_sec: 10.0      # ne fitte le résidu que sur les N dernières s (dynamique récente)
+  bptt_epochs: 100     # epochs BPTT du tir unique (≥60 corrige ; 100 = marge, ~9 s de calcul)
+  num_samples: 100     # taille FIXE du dataset résiduel -> cache JIT chaud (cf. resample())
+  adapt_steps:  1     # TIR UNIQUE (le multi-step incrémental déstabilisait sur step de masse)
+  refill_sec: 2.0      # s SIM de vol sous la nouvelle policy entre 2 steps (≈ window_sec)
+  # MODÈLE DE RÉSIDU utilisé par le BPTT en vol :
+  #   mass_estimation -> résidu de MASSE estimé, PROPORTIONNEL À LA POUSSÉE :
+  #               a_res = coeff·f_d·R_z, coeff = mean(y_z)/mean(T) = 1/m_eff - 1/m_nom.
+  #               Scale avec T -> matche le quad au NOUVEL équilibre -> CORRIGE l'offset
+  #               (≈ résidu exact, m_eff estimé en ligne). ∂a/∂x bien défini sans exciter
+  #               la poussée (excite_sec=0). RECOMMANDÉ pour un changement de masse.
+  #   constant -> résidu CONSTANT = moyenne du résidu mesuré. ∂a/∂x ≡ 0, stable sans
+  #               excitation MAIS ne matche qu'à LA poussée mesurée -> sur un écart de masse
+  #               le BPTT vise une mauvaise poussée de hover, offset NON corrigé
+  #               (cf tests/test_finetune_constant). À éviter pour un step de masse.
+  #   mlp      -> résidu MLP appris (utile pour une dynamique qui VARIE dans le temps).
+  #               ⚠ son ∂a/∂T est non contraint en hover statique -> demande l'excitation
+  #               de poussée ci-dessous pour rester stable (mais le dither dégrade le hover).
+  residual_mode: mass_estimation   # mass_estimation | constant | mlp
+  # EXCITATION avant le fit (n'agit qu'en residual_mode=mlp) : sur un hover statique, la
+  # poussée T est ~constante -> ∂a/∂T du MLP n'est pas contraint par les données
+  # (cf tests/test_residual_real). Avant chaque 'f', on dither la poussée pendant excite_sec
+  # pour faire VARIER T, ce qui contraint le résidu. INUTILE en mode constant (laisser 0).
+  excite_sec: 0.0      # durée du dither de poussée avant le fit (s) ; 0 = off
+  excite_amp_N: 0.03   # amplitude du dither (≈ ±11% du hover 0.265 N)
+  excite_freq_hz: 1.5  # fréquence du dither (Hz)
+  # Garde-fou anti-divergence : après chaque hot-swap, si l'erreur de hover dépasse
+  # max(diverge_err_m, diverge_factor × erreur_avant) -> rollback vers la policy
+  # précédente + arrêt. Protège contre la SUR-ADAPTATION (empiler des steps contre un
+  # résidu structurel constant, ex. biais de masse, finit par déstabiliser).
+  diverge_err_m: 0.5   # seuil absolu d'erreur de hover (m) au-delà duquel on rollback
+  diverge_factor: 2.5  # ou si l'erreur a été multipliée par ce facteur depuis le step
+
+# ── Cache de compilation XLA (côté jax/lotf) ────────────────────────────────
+# La compilation XLA du BPTT domine le warmup (~10 s). Ce cache disque garde les
+# binaires compilés : 1er lancement ~15 s (compile + remplit le cache), lancements
+# suivants ~6 s (recharge, pas de recompilation). Survit aux redémarrages.
+# Mettre compilation_cache_dir: null pour désactiver.
+jax:
+  compilation_cache_dir: .jax_cache   # relatif à test_cf/ (ou chemin absolu)
+
+# ── Pont Genesis (lotf_genesis_env) ─────────────────────────────────────────
+genesis_bridge:
+  physics_dt: 0.01     # 100 Hz physique ; 2 sous-pas / décision -> politique à 50 Hz
+  # F(pwm%) = A·pwm² + B·pwm + C  (force verticale RÉELLE mesurée par calibrate_thrust.py)
+  thrust_fit: [2.592776e-05, 3.981357e-03, 1.240423e-02]
+  # Bouton 'm' en vol (lotf_genesis_eval --online-finetune) : à chaque appui, pose la
+  # masse TOTALE Genesis à la valeur suivante de ce cycle (20 g -> 40 g -> 20 g -> ...).
+  # Sert à provoquer un changement de dynamique et voir le finetuning s'y adapter ('f').
+  mass_cycle_kg: [0.027, 0.040]
+
+# ── Pretrain de la politique de base (RL-real/pretrain_lotf.py) ─────────────
+# Article : "policy pretraining uses 300 epochs across 100 environments".
+# (Le docstring de pretrain_lotf.py recommande horizon=80/lr=5e-4 pour la stabilité
+#  du BPTT sur un quad — équilibre instable ; défauts argparse ci-dessous.)
+pretrain:
+  epochs: 300
+  num_envs: 100
+  horizon: 150         # 150 pas @ 50 Hz = 3 s (article : "epoch lasts 3 s / 150 steps")
+  lr: 0.0005
+  grad_clip: 0.5
+  
+
+# ── RÉFÉRENCE plateforme/env (FAIT FOI : test_cf/RL-real/cf_params.py) ───────
+# Recopie en lecture seule pour avoir tout sous les yeux. NE PAS éditer ici :
+# modifier cf_params.py. (Le loader n'utilise PAS ce bloc.)
+platform_ref:
+  mass_kg: 0.027              # Crazyflie 2.1 nominal
+  g: 9.81
+  t_hover_N: 0.265           # MASS * G
+  thrust_max_total_N: 0.6    # 4 × 0.15 N/rotor
+  omega_max_rad_s: 0.5       # borne d'action (politique/sim)
+  send_omega_max_rad_s: 0.5  # cap radio/Genesis sur la consigne de rate
+  dt_s: 0.02                 # 50 Hz
+  delay_s: 0.04
+  num_last_actions: 3        # ceil(delay/dt)+1
+  hover_goal_m: [0.0, 0.0, 0.5]
+  world_box_half_m: 1.5
+  v_bound_m_s: 5.0
+  num_obs: 27                # 3 + 9 + 3 + 4 × 3
+  num_actions: 4             # [thrust_N, ωx, ωy, ωz]
+  hidden_dims: [512, 512]    # MLP 27 -> 512 -> 512 -> 4 + biais hover

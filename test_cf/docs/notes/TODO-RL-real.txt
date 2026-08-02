@@ -1,0 +1,4 @@
+- 3 reseau mlp residuels + regler les hyperparametres du mlp residuel
+
+- test de la pipeline residuel sur genesis
+

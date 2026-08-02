@@ -1,0 +1,25 @@
+# Python / JAX caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.jax_cache/
+
+# Local environments
+.venv/
+genesis_venv/
+**/.venv/
+
+# Generated logs / temporary outputs
+*.log
+.DS_Store
+
+# Root-owned leftovers from old experiments, if present locally
+checkpoints/
+conf_dds/
+residual_logs/
+soccer/
+
+# test_cf runtime caches
+test_cf/.jax_cache/
+test_cf/measurements/online_ft/
+test_cf/RL-real/cache/

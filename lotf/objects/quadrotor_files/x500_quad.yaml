@@ -1,0 +1,32 @@
+name:               "x500_quad"
+# Holybro X500 V2 — 5010 870Kv motors, 10" props, ~2 kg AUW.
+# Parameters derived from the Gazebo x500/x500_base SDF used in PX4 SITL.
+mass:               2.0                            # [kg]  base_link inertial
+
+# X-frame motor positions in body FLU (converted from SDF FRD: y → -y).
+# SDF arm offset = 0.174 m (motor visuals at ±0.174 m in x and y FRD).
+tbm_fr:             [ 0.174, -0.174, 0.0]          # [m]
+tbm_bl:             [-0.174,  0.174, 0.0]          # [m]
+tbm_br:             [-0.174, -0.174, 0.0]          # [m]
+tbm_fl:             [ 0.174,  0.174, 0.0]          # [m]
+
+# Inertia from SDF base_link (ixx=iyy=0.02167, izz=0.04 kg·m²).
+inertia:            [0.02167, 0.02167, 0.04]       # [kg·m²]
+
+motor_omega_min:    10.0                           # [rad/s]
+motor_omega_max:    1000.0                         # [rad/s]   maxRotVelocity in SDF
+motor_tau:          0.0125                         # [s]       timeConstantUp in SDF
+motor_inertia:      1.0e-05                        # [kg·m²]   10" prop + 5010 rotor estimate
+
+omega_max:          [3.0, 3.0, 1.5]                # [rad/s]   conservative for 2 kg airframe
+
+# T = motorConstant * omega² → 8.55 N at omega=1000 rad/s (from SDF motorConstant=8.54858e-6).
+thrust_map:         [8.54858e-6, 0.0, 0.0]         # [N/(rad/s)^2, N/(rad/s), N]
+kappa:              0.016                          # [Nm/N]    momentConstant in SDF
+thrust_min:         0.0                            # [N]
+thrust_max:         8.55                           # [N] per motor
+rotors_config:      "cross"
+
+aero_coeff_1:       [0.0, 0.0, 0.0]
+aero_coeff_3:       [0.0, 0.0, 0.0]
+aero_coeff_h:        0.0

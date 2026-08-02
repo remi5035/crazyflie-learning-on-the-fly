@@ -1,0 +1,61 @@
+J ai des politiques un peu differentes à tester (ex 27g et 33g en pretrain mais pour l instant ces 2 dernieres n ont pas du tout les mêmes effets ...la 33g diverge)
+
+
+
+ Ca n'a aucun sens que les 2 agissent differement. Donc juste reverifie comment se passent les entrainements des 2... est ce exactement le même environement?
+
+
+
+
+Pistes de correction côté entraînement (à valider) :
+  1. Allonger l'horizon (MAX_SIM_TIME > 3 s) pour que la dérive lente entre dans le coût.
+  2. Pénaliser le rate commandé : action_penalty ne pénalise quasi pas un ω de 0.04 rad/s (smooth_l1 ~ 8e‑4) → augmenter le poids ou ajouter un terme dédié sur ω.
+  3. Adapter le LR à la masse (gradients ∝ 1/m), ou activer le grad‑clip du pretrain.
+
+
+
+
+
+Recaler le fine tuning BPTT pour utiliser la même methode que le pre train
++ test unitaire du BPTT en utilisant la partie du notebook Gwendal
+
+essayer de reduire l ecart statique de position XY toujours présent
+
+Regler plus finement les hyperparametres du finetuning. J ai déjà réduit l'impact pour eviter de tout casser mais ...
+
+  - Le résidu a une dépendance parasite en thrust (fit sur 83 samples de hover quasi-statique) : sa ∂a/∂T est fausse hors-distribution, et le BPTT peut « exploiter » ça avec des
+  à-coups de thrust. → Levier #2 : brider le résidu (reg spectrale 1e-3 → 1e-2, ou capacité MLP ↓), pour que la dynamique vue par le BPTT soit plus lisse.
+  - BPTT court/agressif (15 epochs en ligne, lr=1e-3, schedule cosine) → optimum rugueux. → Levier #3 : lr plus bas ou quelques epochs de plus.
+
+
+
+
+
+
+le fine tuning ne marchait pas bien au chgt de masse. 
+
+en fait le fine tuning ne marchait pas meme avec le residuel theorique
+
+en fait le préentrainement ne marchait déjà pas avec une masse differente...etrange
+
+ici, une solution semble etre d allonger la longueur des episodes pour rendre l'apprentissage plus robuste.
+
+
+j ai ajouté un 2eme delai actionneur... pas sûr que ca soit benefique --actuator_tau (0.04 par defaut quand flag activé)
+
+
+Trois marqueurs enregistrés
+  - finetune_trigger : instant de déclenchement (wall-clock au moment du lancement du fit).
+  - hotswap : instant de chaque hot-swap réussi (existait déjà pour les plots).
+  - compute_time_s : temps de calcul = hot-swap − déclenchement (la soustraction entre les deux repères), calculé dans le callback _on_hotswap.
+
+  Dans le CSV ({session}.csv)
+
+  save_history_to_csv (dans RL-real/utils.py) reçoit maintenant events et ajoute deux colonnes :
+  - event : 'finetune_trigger' ou 'hotswap' sur la ligne dont le time est le plus proche de l'évènement,
+  - compute_time_s : le temps de calcul, posé sur la ligne du hot-swap.
+  
+  Les instants sont écrits dans le même repère temporel que la colonne time (relatif au début du vol RL, comme les marqueurs des plots), donc pour retracer tu filtres simplement
+  df[df.event != ''].
+
+  Un récap est aussi imprimé en fin de run : temps de calcul (hot-swap − déclenchement) : 9.12s.

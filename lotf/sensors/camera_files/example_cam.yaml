@@ -1,0 +1,15 @@
+cam0:
+  cam_overlaps: [ ]
+  camera_model: ds # ds meaning double sphere
+  distortion_coeffs: [ ]
+  distortion_model: none
+  intrinsics:
+    - -0.007441148905788614
+    - 0.6138265280850498
+    - 599.87676296874
+    - 449.2911037186814
+    - 632.1317557077697
+    - 388.2472267118482
+  resolution:
+    - 1280
+    - 720

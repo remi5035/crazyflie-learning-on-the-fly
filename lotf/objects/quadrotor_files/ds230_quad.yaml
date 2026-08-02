@@ -1,0 +1,35 @@
+name:               "ds230_quad"
+# HGLRC DS230 Drone Soccer (3" caged, 1404-4800Kv, GemFan 3016, 3S 850mAh)
+# Frame mass 175.2 g + LiPo 3S 850 mAh ~80 g → total ~0.255 kg.
+mass:               0.255                          # [kg]
+
+# X-frame motor positions in body FLU.
+# Wheelbase = 126 mm (motor-to-motor diagonal) → arm = 63 mm.
+# X-config motor xy offset = arm / sqrt(2) ≈ 0.0445 m.
+tbm_fr:             [ 0.0445, -0.0445, 0.0]        # [m]
+tbm_bl:             [-0.0445,  0.0445, 0.0]        # [m]
+tbm_br:             [-0.0445, -0.0445, 0.0]        # [m]
+tbm_fl:             [ 0.0445,  0.0445, 0.0]        # [m]
+
+# Inertia estimate dominated by the 230 mm protective cage (~50 g shell at r~0.115 m).
+# TODO: measure with bifilar pendulum for accurate values.
+inertia:            [0.0005, 0.0005, 0.0008]       # [kg·m^2]
+
+motor_omega_min:    150.0                          # [rad/s]
+motor_omega_max:    4400.0                         # [rad/s]   4800 Kv × 12.6 V, loaded
+motor_tau:          0.0245                         # [s]       DShot600 + 1404 motor
+motor_inertia:      2.0e-07                        # [kg·m^2]  small 1404 rotor
+
+omega_max:          [3.0, 3.0, 2.0]                # [rad/s]   conservative for caged quad
+
+# T = thrust_map[0] * omega^2 → 2.8 N at omega=4400 rad/s.
+thrust_map:         [1.45e-7, 0.0, 0.0]            # [N/(rad/s)^2, N/(rad/s), N]
+kappa:              0.010                          # [Nm/N]    typical 3" prop
+thrust_min:         0.0                            # [N]
+thrust_max:         2.8                            # [N] per motor
+rotors_config:      "cross"
+
+# No residual aero terms in nominal model (Phase 0 baseline).
+aero_coeff_1:       [0.0, 0.0, 0.0]
+aero_coeff_3:       [0.0, 0.0, 0.0]
+aero_coeff_h:        0.0

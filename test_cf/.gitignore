@@ -1,0 +1,23 @@
+# Artefacts generes par la pipeline test_cf.
+
+# caches de compilation / Python
+.jax_cache/
+**/__pycache__/
+*.pyc
+
+# environnements locaux
+.venv/
+RL-real/.venv/
+
+# sorties temporaires du fine-tuning online
+measurements/online_ft/
+.online_ft/
+
+# caches radio cflib
+RL-real/cache/
+
+# sorties de run ad hoc a la racine de test_cf
+*_lotf.npz
+*_traj.png
+*_thrust.png
+real_run*.csv
