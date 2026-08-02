@@ -129,16 +129,18 @@ On real hardware, the learned policy reaches **comparable or better performance 
 
 ### Learning on the Fly: adapting the simulator mid-flight
 
+> 🚧 **Work in progress.** The residual-acceleration model below is still being tuned — the fit shown is an early checkpoint, not a finished result. The rest of this section describes the intended method and the current, partial validation.
+
 Rather than only making the policy robust up front, [Learning on the Fly](https://arxiv.org/abs/2502.13478) closes the sim-to-real gap **after** deployment, in real time. The drone is modeled as a 6-DoF point mass; a small residual-acceleration network `f_θ(s, a)` is fit online to the mismatch between commanded and observed acceleration, then immediately folded into a **differentiable simulator** used to re-train the policy by backpropagation through time (BPTT) — a full re-training pass in about 10 seconds, instead of a full offline PPO run.
 
-To validate this loop end to end, the policy is deliberately pretrained with an under-estimated mass (**27 g** instead of the real **42 g**, the effective mass once motor wear/PWM calibration is folded in). Flying this policy produces a large steady-state altitude error; the residual network then learns the resulting thrust bias purely from flight data:
+To exercise this loop, the policy is deliberately pretrained with an under-estimated mass (**27 g** instead of the real **42 g**, the effective mass once motor wear/PWM calibration is folded in). Flying this policy produces a large steady-state altitude error; the residual network is then fit to the resulting thrust bias purely from flight data:
 
 <p align="center">
   <img src="test_cf/assets/figures/residual_check.png" width="80%" alt="Learned residual acceleration vs. exact residual, per axis">
 </p>
-<p align="center"><em>Learned residual acceleration (MLP) vs. the exact residual computed from ground truth, on a real flight. The model correctly isolates a constant ≈ −5.5 m/s² bias on the vertical axis — exactly the thrust deficit caused by the 27 g → 42 g mass error.</em></p>
+<p align="center"><em>Learned residual acceleration (MLP) vs. the exact residual computed from ground truth, on a real flight. The fit captures the constant ≈ −5.5 m/s² bias on the vertical axis reasonably well (the thrust deficit from the 27 g → 42 g mass error), but still drifts from the ideal diagonal at the extremes on the horizontal axes — tuning this fit is ongoing.</em></p>
 
-Once the residual model is updated, the policy is hot-swapped for the corrected one **without landing**:
+Even with this imperfect residual, hot-swapping the policy already recovers most of the altitude error, without landing:
 
 <p align="center">
   <img src="test_cf/assets/figures/bien_4_vols_finetune_swap.png" width="85%" alt="4 real flights: altitude, drift, attitude and target error before/after online fine-tuning">
@@ -159,7 +161,7 @@ A second variant recalibrates the actuator model instead of the residual dynamic
 </p>
 <p align="center"><em>Baseline (left, 0.167 m error) vs. actuator recalibration (right, 0.030 m error).</em></p>
 
-**Takeaway:** a policy trained on a deliberately wrong physical model recovers most of its performance within a single ~15 s online adaptation cycle (10 s of data collection + ~5 s of BPTT re-training), on the real drone, with no manual re-tuning. This is the specific result this branch is built to demonstrate and reproduce — see [Part 1](#part-1--quick-start) to run it yourself, and `Rapport.pdf` for the broader study this result is drawn from (reward shaping, domain randomization ablations, body-rate control, residual reinforcement learning, and more).
+**Status:** a policy trained on a deliberately wrong physical model already recovers most of its altitude performance within a single ~15 s online adaptation cycle (10 s of data collection + ~5 s of BPTT re-training), on the real drone, with no manual re-tuning — but the residual model driving this correction is still being refined, so treat the numbers above as early, not final. This loop is the specific result this branch is built around — see [Part 1](#part-1--quick-start) to run it yourself, and `Rapport.pdf` for the broader study it's drawn from (reward shaping, domain randomization ablations, body-rate control, residual reinforcement learning, and more).
 
 ---
 
