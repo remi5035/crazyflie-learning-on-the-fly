@@ -10,7 +10,7 @@ A reinforcement-learning flight controller for the [Bitcraze Crazyflie 2.0](http
 
 This branch is intentionally reduced to the Crazyflie test bench (`test_cf/`) and its supporting `lotf/` engine, so that this specific result — closing a controlled mass mismatch with online BPTT adaptation — is easy to read, run and reproduce end to end.
 
-The full technical report (state of the art, complete ablations, reward shaping study, drone-soccer perspectives) is available in [`Rapport.pdf`](Rapport.pdf) (French, Polytechnique Montréal internship report).
+The full technical report (state of the art, complete ablations, reward shaping study, drone-soccer perspectives) is available in [`Rapport.pdf`](Rapport.pdf) (French).
 
 ---
 
